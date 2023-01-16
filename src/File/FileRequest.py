@@ -109,19 +109,19 @@ class FileRequest(object):
             return False
 
         inner_path = params.get("inner_path", "")
-        current_content_modified = site.content_manager.contents.get(inner_path, {}).get("modified", 0)
-        body = params["body"]
-
         if not inner_path.endswith("content.json"):
             self.response({"error": "Only content.json update allowed"})
             self.connection.badAction(5)
             return
 
+        current_content_modified = site.content_manager.contents.get(inner_path, {}).get("modified", 0)
         should_validate_content = True
         if "modified" in params and params["modified"] <= current_content_modified:
             should_validate_content = False
             valid = None  # Same or earlier content as we have
-        elif not body:  # No body sent, we have to download it first
+        
+        body = params["body"]
+        if not body:  # No body sent, we have to download it first
             site.log.debug("Missing body from update for file %s, downloading ..." % inner_path)
             peer = site.addPeer(self.connection.ip, self.connection.port, return_peer=True, source="update")  # Add or get peer
             try:
@@ -134,6 +134,10 @@ class FileRequest(object):
 
         if should_validate_content:
             try:
+                if type(body) is str:
+                    body = body.encode()
+                # elif type(body) is list:
+                #     content = json.loads(bytes(list).decode())
                 content = json.loads(body.decode())
             except Exception as err:
                 site.log.debug("Update for %s is invalid JSON: %s" % (inner_path, err))
@@ -165,7 +169,7 @@ class FileRequest(object):
                 peer = site.addPeer(self.connection.ip, self.connection.port, return_peer=True, source="update")  # Add or get peer
                 # On complete publish to other peers
                 diffs = params.get("diffs", {})
-                site.onComplete.once(lambda: site.publish(inner_path=inner_path, diffs=diffs, limit=3), "publish_%s" % inner_path)
+                site.onComplete.once(lambda: site.publish(inner_path=inner_path, diffs=diffs, limit=6), "publish_%s" % inner_path)
 
                 # Load new content file and download changed files in new thread
                 def downloader():
